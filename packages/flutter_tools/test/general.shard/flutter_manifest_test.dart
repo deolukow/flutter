@@ -30,6 +30,7 @@ void main() {
     expect(flutterManifest.fontsDescriptor, isEmpty);
     expect(flutterManifest.fonts, isEmpty);
     expect(flutterManifest.assets, isEmpty);
+    expect(flutterManifest.additionalLicenses, isEmpty);
   });
 
   testWithoutContext('FlutterManifest is null when the pubspec.yaml file is not a map', () async {
@@ -972,6 +973,49 @@ flutter:
     expect(flutterManifest.supportedPlatforms, null);
   });
 
+  testWithoutContext('FlutterManifest validSupportedPlatforms return null if the platform keys are not valid', () {
+    const String manifest = '''
+name: test
+flutter:
+  plugin:
+    platforms:
+      some_platform:
+        pluginClass: SomeClass
+''';
+    final BufferLogger logger = BufferLogger.test();
+    final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+      manifest,
+      logger: logger,
+    );
+
+    expect(flutterManifest.isPlugin, true);
+    expect(flutterManifest.validSupportedPlatforms, null);
+  });
+
+  testWithoutContext('FlutterManifest validSupportedPlatforms only returns valid platforms', () {
+    const String manifest = '''
+name: test
+flutter:
+  plugin:
+    platforms:
+      some_platform:
+        pluginClass: SomeClass
+      ios:
+        pluginClass: SomeClass
+''';
+    final BufferLogger logger = BufferLogger.test();
+    final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+      manifest,
+      logger: logger,
+    );
+
+    expect(flutterManifest.isPlugin, true);
+    expect(flutterManifest.validSupportedPlatforms['ios'],
+                              <String, dynamic>{'pluginClass': 'SomeClass'});
+    expect(flutterManifest.validSupportedPlatforms['some_platform'],
+                              isNull);
+  });
+
   testWithoutContext('FlutterManifest getSupportedPlatforms returns valid platforms.', () {
     const String manifest = '''
 name: test
@@ -1038,6 +1082,65 @@ flutter:
     expect(flutterManifest, null);
     expect(logger.errorText,
       contains('Cannot find the `flutter.plugin.platforms` key in the `pubspec.yaml` file. '));
+  });
+
+  testWithoutContext('FlutterManifest can specify additional LICENSE files', () async {
+    const String manifest = '''
+name: test
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  licenses:
+    - foo.txt
+''';
+    final BufferLogger logger = BufferLogger.test();
+    final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+      manifest,
+      logger: logger,
+    );
+
+    expect(flutterManifest.additionalLicenses, <String>['foo.txt']);
+  });
+
+  testWithoutContext('FlutterManifest can validate incorrect licenses key', () async {
+    const String manifest = '''
+name: test
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  licenses: foo.txt
+''';
+    final BufferLogger logger = BufferLogger.test();
+    final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+      manifest,
+      logger: logger,
+    );
+
+    expect(flutterManifest, null);
+    expect(logger.errorText, 'Expected "licenses" to be a list of files, but got foo.txt (String)\n');
+  });
+
+  testWithoutContext('FlutterManifest validates individual list items', () async {
+    const String manifest = '''
+name: test
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  licenses:
+    - foo.txt
+    - bar: fizz
+''';
+    final BufferLogger logger = BufferLogger.test();
+    final FlutterManifest flutterManifest = FlutterManifest.createFromString(
+      manifest,
+      logger: logger,
+    );
+
+    expect(flutterManifest, null);
+    expect(logger.errorText, 'Expected "licenses" to be a list of files, but element 1 was a YamlMap\n');
   });
 }
 

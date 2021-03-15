@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// @dart = 2.8
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/gestures.dart';
@@ -13,7 +11,7 @@ import '../rendering/mock_canvas.dart';
 import '../widgets/semantics_tester.dart';
 
 void main() {
-  testWidgets('TextButton defaults', (WidgetTester tester) async {
+  testWidgets('TextButton, TextButton.icon defaults', (WidgetTester tester) async {
     const ColorScheme colorScheme = ColorScheme.light();
 
     // Enabled TextButton
@@ -43,11 +41,14 @@ void main() {
     expect(material.elevation, 0.0);
     expect(material.shadowColor, const Color(0xff000000));
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)));
-    expect(material.textStyle.color, colorScheme.primary);
-    expect(material.textStyle.fontFamily, 'Roboto');
-    expect(material.textStyle.fontSize, 14);
-    expect(material.textStyle.fontWeight, FontWeight.w500);
+    expect(material.textStyle!.color, colorScheme.primary);
+    expect(material.textStyle!.fontFamily, 'Roboto');
+    expect(material.textStyle!.fontSize, 14);
+    expect(material.textStyle!.fontWeight, FontWeight.w500);
     expect(material.type, MaterialType.button);
+
+    final Align align = tester.firstWidget<Align>(find.ancestor(of: find.text('button'), matching: find.byType(Align)));
+    expect(align.alignment, Alignment.center);
 
     final Offset center = tester.getCenter(find.byType(TextButton));
     final TestGesture gesture = await tester.startGesture(center);
@@ -68,10 +69,46 @@ void main() {
     expect(material.elevation, 0.0);
     expect(material.shadowColor, const Color(0xff000000));
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)));
-    expect(material.textStyle.color, colorScheme.primary);
-    expect(material.textStyle.fontFamily, 'Roboto');
-    expect(material.textStyle.fontSize, 14);
-    expect(material.textStyle.fontWeight, FontWeight.w500);
+    expect(material.textStyle!.color, colorScheme.primary);
+    expect(material.textStyle!.fontFamily, 'Roboto');
+    expect(material.textStyle!.fontSize, 14);
+    expect(material.textStyle!.fontWeight, FontWeight.w500);
+    expect(material.type, MaterialType.button);
+
+    // Enabled TextButton.icon
+    final Key iconButtonKey = UniqueKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.from(colorScheme: colorScheme),
+        home: Center(
+          child: TextButton.icon(
+            key: iconButtonKey,
+            onPressed: () { },
+            icon: const Icon(Icons.add),
+            label: const Text('label'),
+          ),
+        ),
+      ),
+    );
+
+    final Finder iconButtonMaterial = find.descendant(
+      of: find.byKey(iconButtonKey),
+      matching: find.byType(Material),
+    );
+
+    material = tester.widget<Material>(iconButtonMaterial);
+    expect(material.animationDuration, const Duration(milliseconds: 200));
+    expect(material.borderOnForeground, true);
+    expect(material.borderRadius, null);
+    expect(material.clipBehavior, Clip.none);
+    expect(material.color, Colors.transparent);
+    expect(material.elevation, 0.0);
+    expect(material.shadowColor, const Color(0xff000000));
+    expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)));
+    expect(material.textStyle!.color, colorScheme.primary);
+    expect(material.textStyle!.fontFamily, 'Roboto');
+    expect(material.textStyle!.fontSize, 14);
+    expect(material.textStyle!.fontWeight, FontWeight.w500);
     expect(material.type, MaterialType.button);
 
     // Disabled TextButton
@@ -96,10 +133,10 @@ void main() {
     expect(material.elevation, 0.0);
     expect(material.shadowColor, const Color(0xff000000));
     expect(material.shape, RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)));
-    expect(material.textStyle.color, colorScheme.onSurface.withOpacity(0.38));
-    expect(material.textStyle.fontFamily, 'Roboto');
-    expect(material.textStyle.fontSize, 14);
-    expect(material.textStyle.fontWeight, FontWeight.w500);
+    expect(material.textStyle!.color, colorScheme.onSurface.withOpacity(0.38));
+    expect(material.textStyle!.fontFamily, 'Roboto');
+    expect(material.textStyle!.fontSize, 14);
+    expect(material.textStyle!.fontWeight, FontWeight.w500);
     expect(material.type, MaterialType.button);
   });
 
@@ -161,9 +198,9 @@ void main() {
         MaterialState.focused,
       };
       if (states.any(interactiveStates.contains)) {
-        return Colors.blue[900];
+        return Colors.blue[900]!;
       }
-      return Colors.blue[800];
+      return Colors.blue[800]!;
     }
 
     await tester.pumpWidget(
@@ -258,8 +295,8 @@ void main() {
       ),
     );
 
-    Color textColor() {
-      return tester.renderObject<RenderParagraph>(find.text('TextButton')).text.style.color;
+    Color? textColor() {
+      return tester.renderObject<RenderParagraph>(find.text('TextButton')).text.style?.color;
     }
 
     // Default, not disabled.
@@ -329,7 +366,7 @@ void main() {
       ),
     );
 
-    Color iconColor() => _iconStyle(tester, Icons.add).color;
+    Color? iconColor() => _iconStyle(tester, Icons.add)?.color;
     // Default, not disabled.
     expect(iconColor(), equals(defaultColor));
 
@@ -378,7 +415,7 @@ void main() {
   testWidgets('Does TextButton work with hover', (WidgetTester tester) async {
     const Color hoverColor = Color(0xff001122);
 
-    Color getOverlayColor(Set<MaterialState> states) {
+    Color? getOverlayColor(Set<MaterialState> states) {
       return states.contains(MaterialState.hovered) ? hoverColor : null;
     }
 
@@ -388,7 +425,7 @@ void main() {
         child: Material(
           child: TextButton(
             style: ButtonStyle(
-              overlayColor: MaterialStateProperty.resolveWith<Color>(getOverlayColor),
+              overlayColor: MaterialStateProperty.resolveWith<Color?>(getOverlayColor),
             ),
             child: Container(),
             onPressed: () { /* to make sure the button is enabled */ },
@@ -411,7 +448,7 @@ void main() {
   testWidgets('Does TextButton work with focus', (WidgetTester tester) async {
     const Color focusColor = Color(0xff001122);
 
-    Color getOverlayColor(Set<MaterialState> states) {
+    Color? getOverlayColor(Set<MaterialState> states) {
       return states.contains(MaterialState.focused) ? focusColor : null;
     }
 
@@ -421,7 +458,7 @@ void main() {
         textDirection: TextDirection.ltr,
         child: TextButton(
           style: ButtonStyle(
-            overlayColor: MaterialStateProperty.resolveWith<Color>(getOverlayColor),
+            overlayColor: MaterialStateProperty.resolveWith<Color?>(getOverlayColor),
           ),
           focusNode: focusNode,
           onPressed: () { },
@@ -430,7 +467,7 @@ void main() {
       ),
     );
 
-    WidgetsBinding.instance.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+    WidgetsBinding.instance!.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     focusNode.requestFocus();
     await tester.pumpAndSettle();
 
@@ -590,7 +627,7 @@ void main() {
     bool wasPressed;
     Finder textButton;
 
-    Widget buildFrame({ VoidCallback onPressed, VoidCallback onLongPress }) {
+    Widget buildFrame({ VoidCallback? onPressed, VoidCallback? onLongPress }) {
       return Directionality(
         textDirection: TextDirection.ltr,
         child: TextButton(
@@ -731,7 +768,7 @@ void main() {
 
     const List<double> textScaleFactorOptions = <double>[0.5, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0];
     const List<TextDirection> textDirectionOptions = <TextDirection>[TextDirection.ltr, TextDirection.rtl];
-    const List<Widget> iconOptions = <Widget>[null, Icon(Icons.add, size: 18, key: iconKey)];
+    const List<Widget?> iconOptions = <Widget?>[null, Icon(Icons.add, size: 18, key: iconKey)];
 
     // Expected values for each textScaleFactor.
     final Map<double, double> paddingVertical = <double, double>{
@@ -781,7 +818,7 @@ void main() {
     }
 
     /// Computes the padding between two [Rect]s, one inside the other.
-    EdgeInsets paddingBetween({ Rect parent, Rect child }) {
+    EdgeInsets paddingBetween({ required Rect parent, required Rect child }) {
       assert (parent.intersect(child) == child);
       return EdgeInsets.fromLTRB(
         child.left - parent.left,
@@ -793,7 +830,7 @@ void main() {
 
     for (final double textScaleFactor in textScaleFactorOptions) {
       for (final TextDirection textDirection in textDirectionOptions) {
-        for (final Widget icon in iconOptions) {
+        for (final Widget? icon in iconOptions) {
           final String testName = 'TextButton'
             ', text scale $textScaleFactor'
             '${icon != null ? ", with icon" : ""}'
@@ -845,12 +882,12 @@ void main() {
 
             // Compute expected padding, and check.
 
-            final double expectedPaddingTop = paddingVertical[textScaleFactor];
-            final double expectedPaddingBottom = paddingVertical[textScaleFactor];
+            final double expectedPaddingTop = paddingVertical[textScaleFactor]!;
+            final double expectedPaddingBottom = paddingVertical[textScaleFactor]!;
 
             final double expectedPaddingStart = icon != null
-              ? textPaddingWithIconHorizontal[textScaleFactor]
-              : textPaddingWithoutIconHorizontal[textScaleFactor];
+              ? textPaddingWithIconHorizontal[textScaleFactor]!
+              : textPaddingWithoutIconHorizontal[textScaleFactor]!;
             final double expectedPaddingEnd = expectedPaddingStart;
 
             final EdgeInsets expectedPadding = EdgeInsetsDirectional.fromSTEB(
@@ -867,9 +904,9 @@ void main() {
 
             final RenderBox labelRenderBox = tester.renderObject<RenderBox>(find.byKey(labelKey));
             final Rect labelBounds = globalBounds(labelRenderBox);
-            final RenderBox iconRenderBox = icon == null ? null : tester.renderObject<RenderBox>(find.byKey(iconKey));
-            final Rect iconBounds = icon == null ? null : globalBounds(iconRenderBox);
-            final Rect childBounds = icon == null ? labelBounds : labelBounds.expandToInclude(iconBounds);
+            final RenderBox? iconRenderBox = icon == null ? null : tester.renderObject<RenderBox>(find.byKey(iconKey));
+            final Rect? iconBounds = icon == null ? null : globalBounds(iconRenderBox!);
+            final Rect childBounds = icon == null ? labelBounds : labelBounds.expandToInclude(iconBounds!);
 
             // We measure the `InkResponse` descendant of the button
             // element, because the button has a larger `RenderBox`
@@ -918,8 +955,8 @@ void main() {
             // Check the gap between the icon and the label
             if (icon != null) {
               final double gapWidth = textDirection == TextDirection.ltr
-                ? labelBounds.left - iconBounds.right
-                : iconBounds.left - labelBounds.right;
+                ? labelBounds.left - iconBounds!.right
+                : iconBounds!.left - labelBounds.right;
               expect(gapWidth, paddingWithIconGap[textScaleFactor]);
             }
 
@@ -978,7 +1015,7 @@ void main() {
 }
 
 
-TextStyle _iconStyle(WidgetTester tester, IconData icon) {
+TextStyle? _iconStyle(WidgetTester tester, IconData icon) {
   final RichText iconRichText = tester.widget<RichText>(
     find.descendant(of: find.byIcon(icon), matching: find.byType(RichText)),
   );

@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -377,7 +375,7 @@ class SystemMouseCursor extends MouseCursor {
   final String kind;
 
   @override
-  String get debugDescription => '$runtimeType($kind)';
+  String get debugDescription => '${objectRuntimeType(this, 'SystemMouseCursor')}($kind)';
 
   @override
   @protected

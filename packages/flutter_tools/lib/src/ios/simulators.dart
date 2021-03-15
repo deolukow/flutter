@@ -17,6 +17,7 @@ import '../base/process.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
 import '../convert.dart';
+import '../devfs.dart';
 import '../device.dart';
 import '../globals.dart' as globals;
 import '../macos/xcode.dart';
@@ -72,7 +73,6 @@ class IOSSimulatorUtils {
         name: device.name,
         simControl: _simControl,
         simulatorCategory: device.category,
-        xcode: _xcode,
       );
     }).toList();
   }
@@ -308,9 +308,7 @@ class IOSSimulator extends Device {
       this.name,
       this.simulatorCategory,
       @required SimControl simControl,
-      @required Xcode xcode,
     }) : _simControl = simControl,
-         _xcode = xcode,
          super(
            id,
            category: Category.mobile,
@@ -324,7 +322,11 @@ class IOSSimulator extends Device {
   final String simulatorCategory;
 
   final SimControl _simControl;
-  final Xcode _xcode;
+
+  @override
+  DevFSWriter createDevFSWriter(covariant ApplicationPackage app, String userIdentifier) {
+    return LocalDevFSWriter(fileSystem: globals.fs);
+  }
 
   @override
   Future<bool> get isLocalEmulator async => true;
@@ -448,13 +450,18 @@ class IOSSimulator extends Device {
           '--enable-checked-mode',
           '--verify-entry-points',
         ],
+        if (debuggingOptions.enableSoftwareRendering) '--enable-software-rendering',
         if (debuggingOptions.startPaused) '--start-paused',
         if (debuggingOptions.disableServiceAuthCodes) '--disable-service-auth-codes',
         if (debuggingOptions.skiaDeterministicRendering) '--skia-deterministic-rendering',
         if (debuggingOptions.useTestFonts) '--use-test-fonts',
         if (debuggingOptions.traceAllowlist != null) '--trace-allowlist="${debuggingOptions.traceAllowlist}"',
         if (dartVmFlags.isNotEmpty) '--dart-flags=$dartVmFlags',
+<<<<<<< HEAD
         '--observatory-port=${debuggingOptions.hostVmServicePort ?? 0}',
+=======
+        '--observatory-port=${debuggingOptions.hostVmServicePort ?? 0}'
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
       ],
     ];
 
@@ -603,12 +610,8 @@ class IOSSimulator extends Device {
     }
   }
 
-  bool get _xcodeVersionSupportsScreenshot {
-    return _xcode.majorVersion > 8 || (_xcode.majorVersion == 8 && _xcode.minorVersion >= 2);
-  }
-
   @override
-  bool get supportsScreenshot => _xcodeVersionSupportsScreenshot;
+  bool get supportsScreenshot => true;
 
   @override
   Future<void> takeScreenshot(File outputFile) {
@@ -634,7 +637,7 @@ class IOSSimulator extends Device {
 /// Launches the device log reader process on the host and parses the syslog.
 @visibleForTesting
 Future<Process> launchDeviceSystemLogTool(IOSSimulator device) async {
-  return processUtils.start(<String>['tail', '-n', '0', '-F', device.logFilePath]);
+  return globals.processUtils.start(<String>['tail', '-n', '0', '-F', device.logFilePath]);
 }
 
 /// Launches the device log reader process on the host and parses unified logging.
@@ -660,7 +663,11 @@ Future<Process> launchDeviceUnifiedLogging (IOSSimulator device, String appName)
     notP('eventMessage CONTAINS " libxpc.dylib "'),
   ]);
 
+<<<<<<< HEAD
   return processUtils.start(<String>[
+=======
+  return globals.processUtils.start(<String>[
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
     ...globals.xcode.xcrunCommand(),
     'simctl',
     'spawn',
@@ -678,7 +685,7 @@ Future<Process> launchDeviceUnifiedLogging (IOSSimulator device, String appName)
 Future<Process> launchSystemLogTool(IOSSimulator device) async {
   // Versions of iOS prior to 11 tail the simulator syslog file.
   if (await device.sdkMajorVersion < 11) {
-    return processUtils.start(<String>['tail', '-n', '0', '-F', '/private/var/log/system.log']);
+    return globals.processUtils.start(<String>['tail', '-n', '0', '-F', '/private/var/log/system.log']);
   }
 
   // For iOS 11 and later, all relevant detail is in the device log.

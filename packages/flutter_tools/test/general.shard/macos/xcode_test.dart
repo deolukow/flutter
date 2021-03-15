@@ -39,14 +39,16 @@ void main() {
 
     group('Xcode', () {
       Xcode xcode;
+      MockXcodeProjectInterpreter mockXcodeProjectInterpreter;
 
       setUp(() {
+        mockXcodeProjectInterpreter = MockXcodeProjectInterpreter();
         xcode = Xcode(
           logger: logger,
           platform: FakePlatform(operatingSystem: 'macos'),
           fileSystem: MemoryFileSystem.test(),
           processManager: processManager,
-          xcodeProjectInterpreter: MockXcodeProjectInterpreter(),
+          xcodeProjectInterpreter: mockXcodeProjectInterpreter,
         );
       });
 
@@ -61,6 +63,13 @@ void main() {
       });
 
       testWithoutContext('eulaSigned is false when clang is not installed', () {
+<<<<<<< HEAD
+=======
+        when(mockXcodeProjectInterpreter.xcrunCommand()).thenReturn(<String>['xcrun']);
+
+        when(processManager.runSync(<String>['which', 'sysctl']))
+            .thenReturn(ProcessResult(1, 0, '', ''));
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
         when(processManager.runSync(<String>['sysctl', 'hw.optional.arm64']))
             .thenReturn(ProcessResult(123, 1, '', ''));
         when(processManager.runSync(<String>['xcrun', 'clang']))
@@ -81,8 +90,8 @@ void main() {
           logger: logger,
           xcode: mockXcode,
           platform: null,
-          artifacts: MockArtifacts(),
-          cache: MockCache(),
+          artifacts: Artifacts.test(),
+          cache: Cache.test(),
           iproxy: IProxy.test(logger: logger, processManager: processManager),
         );
         when(mockXcode.xcrunCommand()).thenReturn(<String>['xcrun']);
@@ -130,6 +139,7 @@ void main() {
           processManager: fakeProcessManager,
           xcodeProjectInterpreter: mockXcodeProjectInterpreter,
         );
+<<<<<<< HEAD
 
         expect(xcode.isInstalledAndMeetsVersionCheck, isFalse);
       });
@@ -233,11 +243,201 @@ void main() {
           when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
           when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
           when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+=======
+
+        expect(xcode.isInstalledAndMeetsVersionCheck, isFalse);
+      });
+
+      testWithoutContext('isSimctlInstalled is true when simctl list succeeds', () {
+        when(mockXcodeProjectInterpreter.xcrunCommand()).thenReturn(<String>['xcrun']);
+        fakeProcessManager.addCommand(
+          const FakeCommand(
+            command: <String>[
+              'xcrun',
+              'simctl',
+              'list',
+            ],
+          ),
+        );
+        final Xcode xcode = Xcode(
+          logger: logger,
+          platform: FakePlatform(operatingSystem: 'macos'),
+          fileSystem: MemoryFileSystem.test(),
+          processManager: fakeProcessManager,
+          xcodeProjectInterpreter: mockXcodeProjectInterpreter,
+        );
+
+        expect(xcode.isSimctlInstalled, isTrue);
+        expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+      });
+
+      testWithoutContext('isSimctlInstalled is true when simctl list fails', () {
+        when(mockXcodeProjectInterpreter.xcrunCommand()).thenReturn(<String>['xcrun']);
+        fakeProcessManager.addCommand(
+          const FakeCommand(
+            command: <String>[
+              'xcrun',
+              'simctl',
+              'list',
+            ],
+            exitCode: 1,
+          ),
+        );
+        final Xcode xcode = Xcode(
+          logger: logger,
+          platform: FakePlatform(operatingSystem: 'macos'),
+          fileSystem: MemoryFileSystem.test(),
+          processManager: fakeProcessManager,
+          xcodeProjectInterpreter: mockXcodeProjectInterpreter,
+        );
+
+        expect(xcode.isSimctlInstalled, isFalse);
+        expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+      });
+
+      group('macOS', () {
+        Xcode xcode;
+        FakePlatform platform;
+
+        setUp(() {
+          mockXcodeProjectInterpreter = MockXcodeProjectInterpreter();
+          when(mockXcodeProjectInterpreter.xcrunCommand()).thenReturn(<String>['xcrun']);
+          platform = FakePlatform(operatingSystem: 'macos');
+          xcode = Xcode(
+            logger: logger,
+            platform: platform,
+            fileSystem: MemoryFileSystem.test(),
+            processManager: fakeProcessManager,
+            xcodeProjectInterpreter: mockXcodeProjectInterpreter,
+          );
+        });
+
+        testWithoutContext('xcodeSelectPath returns path when xcode-select is installed', () {
+          const String xcodePath = '/Applications/Xcode8.0.app/Contents/Developer';
+          fakeProcessManager.addCommand(const FakeCommand(
+            command: <String>['/usr/bin/xcode-select', '--print-path'],
+            stdout: xcodePath,
+          ));
+
+          expect(xcode.xcodeSelectPath, xcodePath);
+          expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is false when version is less than minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(9);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRequiredVersionSatisfactory, isFalse);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is false when xcodebuild tools are not installed', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(false);
+
+          expect(xcode.isRequiredVersionSatisfactory, isFalse);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is true when version meets minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRequiredVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is true when major version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(12);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRequiredVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is true when minor version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(3);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRequiredVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('xcodeVersionSatisfactory is true when patch version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(1);
+
+          expect(xcode.isRequiredVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is false when version is less than minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(9);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isFalse);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is false when xcodebuild tools are not installed', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(false);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isFalse);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is true when version meets minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(12);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(1);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is true when major version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(13);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is true when minor version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(12);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(3);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('isRecommendedVersionSatisfactory is true when patch version exceeds minimum', () {
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(12);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(2);
+
+          expect(xcode.isRecommendedVersionSatisfactory, isTrue);
+        });
+
+        testWithoutContext('isInstalledAndMeetsVersionCheck is false when not installed', () {
+          fakeProcessManager.addCommand(const FakeCommand(
+            command: <String>['/usr/bin/xcode-select', '--print-path'],
+            stdout: '/Applications/Xcode8.0.app/Contents/Developer',
+          ));
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(false);
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
 
           expect(xcode.isInstalledAndMeetsVersionCheck, isFalse);
           expect(fakeProcessManager.hasRemainingExpectations, isFalse);
         });
 
+<<<<<<< HEAD
         testWithoutContext('isInstalledAndMeetsVersionCheck is false when version not satisfied', () {
           fakeProcessManager.addCommand(const FakeCommand(
             command: <String>['/usr/bin/xcode-select', '--print-path'],
@@ -246,12 +446,24 @@ void main() {
           when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
           when(mockXcodeProjectInterpreter.majorVersion).thenReturn(10);
           when(mockXcodeProjectInterpreter.minorVersion).thenReturn(2);
+=======
+        testWithoutContext('isInstalledAndMeetsVersionCheck is false when no xcode-select', () {
+          fakeProcessManager.addCommand(const FakeCommand(
+            command: <String>['/usr/bin/xcode-select', '--print-path'],
+            exitCode: 127,
+            stderr: 'ERROR',
+          ));
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
           when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
 
           expect(xcode.isInstalledAndMeetsVersionCheck, isFalse);
           expect(fakeProcessManager.hasRemainingExpectations, isFalse);
         });
 
+<<<<<<< HEAD
         testWithoutContext('xcrun runs natively on arm64', () {
           fakeProcessManager.addCommands(const <FakeCommand>[
             FakeCommand(
@@ -275,11 +487,32 @@ void main() {
           fakeProcessManager.addCommand(const FakeCommand(
             command: <String>['/usr/bin/xcode-select', '--print-path'],
             stdout: '/Applications/Xcode8.0.app/Contents/Developer',
+=======
+        testWithoutContext('isInstalledAndMeetsVersionCheck is false when version not satisfied', () {
+          fakeProcessManager.addCommand(const FakeCommand(
+            command: <String>['/usr/bin/xcode-select', '--print-path'],
+            stdout: '/Applications/Xcode8.0.app/Contents/Developer',
+          ));
+          when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
+          when(mockXcodeProjectInterpreter.majorVersion).thenReturn(10);
+          when(mockXcodeProjectInterpreter.minorVersion).thenReturn(2);
+          when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+
+          expect(xcode.isInstalledAndMeetsVersionCheck, isFalse);
+          expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+        });
+
+        testWithoutContext('isInstalledAndMeetsVersionCheck is true when macOS and installed and version is satisfied', () {
+          fakeProcessManager.addCommand(const FakeCommand(
+            command: <String>['/usr/bin/xcode-select', '--print-path'],
+            stdout: '/Applications/Xcode8.0.app/Contents/Developer',
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
           ));
           when(mockXcodeProjectInterpreter.isInstalled).thenReturn(true);
           when(mockXcodeProjectInterpreter.majorVersion).thenReturn(11);
           when(mockXcodeProjectInterpreter.minorVersion).thenReturn(0);
           when(mockXcodeProjectInterpreter.patchVersion).thenReturn(0);
+<<<<<<< HEAD
 
           expect(xcode.isInstalledAndMeetsVersionCheck, isTrue);
           expect(fakeProcessManager.hasRemainingExpectations, isFalse);
@@ -306,10 +539,32 @@ void main() {
           expect(fakeProcessManager.hasRemainingExpectations, isFalse);
         });
 
+=======
+
+          expect(xcode.isInstalledAndMeetsVersionCheck, isTrue);
+          expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+        });
+
+        testWithoutContext('eulaSigned is false when clang output indicates EULA not yet accepted', () {
+          fakeProcessManager.addCommands(const <FakeCommand>[
+            FakeCommand(
+              command: <String>['xcrun', 'clang'],
+              exitCode: 1,
+              stderr:
+                  'Xcode EULA has not been accepted.\nLaunch Xcode and accept the license.',
+            ),
+          ]);
+
+          expect(xcode.eulaSigned, isFalse);
+          expect(fakeProcessManager.hasRemainingExpectations, isFalse);
+        });
+
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
         testWithoutContext('eulaSigned is true when clang output indicates EULA has been accepted', () {
           fakeProcessManager.addCommands(
             const <FakeCommand>[
               FakeCommand(
+<<<<<<< HEAD
                 command: <String>[
                   'sysctl',
                   'hw.optional.arm64',
@@ -317,6 +572,8 @@ void main() {
                 exitCode: 1,
               ),
               FakeCommand(
+=======
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
                 command: <String>['xcrun', 'clang'],
                 exitCode: 1,
                 stderr: 'clang: error: no input files',
@@ -328,6 +585,7 @@ void main() {
         });
 
         testWithoutContext('SDK name', () {
+<<<<<<< HEAD
           expect(getNameForSdk(SdkType.iPhone), 'iphoneos');
           expect(getNameForSdk(SdkType.iPhoneSimulator), 'iphonesimulator');
           expect(getNameForSdk(SdkType.macOS), 'macosx');
@@ -346,6 +604,13 @@ void main() {
             );
           });
 
+=======
+          expect(getSDKNameForIOSEnvironmentType(EnvironmentType.physical), 'iphoneos');
+          expect(getSDKNameForIOSEnvironmentType(EnvironmentType.simulator), 'iphonesimulator');
+        });
+
+        group('SDK location', () {
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
           const String sdkroot = 'Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS13.2.sdk';
 
           testWithoutContext('--show-sdk-path iphoneos', () async {
@@ -354,6 +619,7 @@ void main() {
               stdout: sdkroot,
             ));
 
+<<<<<<< HEAD
             expect(await xcode.sdkLocation(SdkType.iPhone), sdkroot);
             expect(fakeProcessManager.hasRemainingExpectations, isFalse);
           });
@@ -365,6 +631,9 @@ void main() {
             ));
 
             expect(await xcode.sdkLocation(SdkType.macOS), sdkroot);
+=======
+            expect(await xcode.sdkLocation(EnvironmentType.physical), sdkroot);
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
             expect(fakeProcessManager.hasRemainingExpectations, isFalse);
           });
 
@@ -375,7 +644,11 @@ void main() {
               stderr: 'xcrun: error:',
             ));
 
+<<<<<<< HEAD
             expect(() async => await xcode.sdkLocation(SdkType.iPhone),
+=======
+            expect(() async => await xcode.sdkLocation(EnvironmentType.physical),
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
               throwsToolExit(message: 'Could not find SDK location'));
             expect(fakeProcessManager.hasRemainingExpectations, isFalse);
           });
@@ -386,20 +659,16 @@ void main() {
     group('xcdevice', () {
       XCDevice xcdevice;
       MockXcode mockXcode;
-      MockArtifacts mockArtifacts;
-      MockCache mockCache;
 
       setUp(() {
         mockXcode = MockXcode();
-        mockArtifacts = MockArtifacts();
-        mockCache = MockCache();
         xcdevice = XCDevice(
           processManager: fakeProcessManager,
           logger: logger,
           xcode: mockXcode,
           platform: null,
-          artifacts: mockArtifacts,
-          cache: mockCache,
+          artifacts: Artifacts.test(),
+          cache: Cache.test(),
           iproxy: IProxy.test(logger: logger, processManager: fakeProcessManager),
         );
         when(mockXcode.xcrunCommand()).thenReturn(<String>['xcrun']);
@@ -763,7 +1032,7 @@ void main() {
       "underlyingErrors" : [
         {
           "code" : 5,
-          "failureReason" : "allowsSecureServices: 1. isConnected: 0. Platform: <DVTPlatform:0x7f804ce32880:'com.apple.platform.iphoneos':<DVTFilePath:0x7f804ce32800:'\/Users\/Applications\/Xcode.app\/Contents\/Developer\/Platforms\/iPhoneOS.platform'>>. DTDKDeviceIdentifierIsIDID: 0",
+          "failureReason" : "allowsSecureServices: 1. isConnected: 0. Platform: <DVTPlatform:0x7f804ce32880:'com.apple.platform.iphoneos':<DVTFilePath:0x7f804ce32800:'/Users/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform'>>. DTDKDeviceIdentifierIsIDID: 0",
           "description" : "📱<DVTiOSDevice (0x7f801f190450), iPhone, iPhone, 13.3 (17C54), d83d5bc53967baa0ee18626ba87b6254b2ab5418> -- Failed _shouldMakeReadyForDevelopment check even though device is not locked by passcode.",
           "recoverySuggestion" : "",
           "domain" : "com.apple.platform.iphoneos"
@@ -852,5 +1121,8 @@ void main() {
 class MockXcode extends Mock implements Xcode {}
 class MockProcessManager extends Mock implements ProcessManager {}
 class MockXcodeProjectInterpreter extends Mock implements XcodeProjectInterpreter {}
+<<<<<<< HEAD
 class MockArtifacts extends Mock implements Artifacts {}
 class MockCache extends Mock implements Cache {}
+=======
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/application_package.dart';
@@ -16,11 +17,17 @@ import 'package:flutter_tools/src/base/user_messages.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/run.dart';
+import 'package:flutter_tools/src/convert.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:flutter_tools/src/project.dart';
 import 'package:flutter_tools/src/reporting/reporting.dart';
+import 'package:flutter_tools/src/resident_runner.dart';
 import 'package:flutter_tools/src/runner/flutter_command.dart';
+import 'package:flutter_tools/src/vmservice.dart';
+import 'package:meta/meta.dart';
 import 'package:mockito/mockito.dart';
+import 'package:vm_service/vm_service.dart';
 
 import '../../src/common.dart';
 import '../../src/context.dart';
@@ -30,7 +37,6 @@ import '../../src/testbed.dart';
 
 void main() {
   group('run', () {
-    MockApplicationPackageFactory mockApplicationPackageFactory;
     MockDeviceManager mockDeviceManager;
     FileSystem fileSystem;
 
@@ -39,14 +45,12 @@ void main() {
     });
 
     setUp(() {
-      mockApplicationPackageFactory = MockApplicationPackageFactory();
       mockDeviceManager = MockDeviceManager();
       fileSystem = MemoryFileSystem.test();
     });
 
     testUsingContext('fails when target not found', () async {
       final RunCommand command = RunCommand();
-      applyMocksToCommand(command);
       try {
         await createTestCommandRunner(command).run(<String>['run', '-t', 'abc123', '--no-pub']);
         fail('Expect exception');
@@ -65,7 +69,6 @@ void main() {
       fileSystem.file('.packages').createSync();
 
       final RunCommand command = RunCommand();
-      applyMocksToCommand(command);
       try {
         await createTestCommandRunner(command).run(<String>[
           'run',
@@ -94,7 +97,6 @@ void main() {
         ..createSync(recursive: true);
 
       final RunCommand command = RunCommand();
-      applyMocksToCommand(command);
       try {
         await createTestCommandRunner(command).run(<String>[
           'run',
@@ -122,7 +124,6 @@ void main() {
         .createSync(recursive: true);
 
       final RunCommand command = RunCommand();
-      applyMocksToCommand(command);
       try {
         await createTestCommandRunner(command).run(<String>[
           'run',
@@ -141,17 +142,17 @@ void main() {
 
     group('run app', () {
       MemoryFileSystem fs;
-      MockArtifacts mockArtifacts;
+      Artifacts artifacts;
       MockCache mockCache;
       MockProcessManager mockProcessManager;
-      MockUsage mockUsage;
+      Usage usage;
       Directory tempDir;
 
       setUp(() {
-        mockArtifacts = MockArtifacts();
+        artifacts = Artifacts.test();
         mockCache = MockCache();
-        mockUsage = MockUsage();
-        fs = MemoryFileSystem();
+        usage = Usage.test();
+        fs = MemoryFileSystem.test();
         mockProcessManager = MockProcessManager();
 
         tempDir = fs.systemTempDirectory.createTempSync('flutter_run_test.');
@@ -172,7 +173,6 @@ void main() {
 
       testUsingContext('exits with a user message when no supported devices attached', () async {
         final RunCommand command = RunCommand();
-        applyMocksToCommand(command);
 
         const List<Device> noDevices = <Device>[];
         when(mockDeviceManager.getDevices()).thenAnswer(
@@ -221,7 +221,6 @@ void main() {
         when(mockDeviceManager.deviceDiscoverers).thenReturn(<DeviceDiscovery>[]);
 
         final RunCommand command = RunCommand();
-        applyMocksToCommand(command);
         await expectLater(createTestCommandRunner(command).run(<String>[
           'run',
           '--no-pub',
@@ -237,7 +236,6 @@ void main() {
 
       testUsingContext('shows unsupported devices when no supported devices are found',  () async {
         final RunCommand command = RunCommand();
-        applyMocksToCommand(command);
 
         final MockDevice mockDevice = MockDevice(TargetPlatform.android_arm);
         when(mockDevice.isLocalEmulator).thenAnswer((Invocation invocation) => Future<bool>.value(true));
@@ -246,6 +244,8 @@ void main() {
         when(mockDevice.id).thenReturn('mock-id');
         when(mockDevice.name).thenReturn('mock-name');
         when(mockDevice.platformType).thenReturn(PlatformType.android);
+        when(mockDevice.targetPlatformDisplayName)
+            .thenAnswer((Invocation invocation) async => 'mock-platform');
         when(mockDevice.sdkNameAndVersion).thenAnswer((Invocation invocation) => Future<String>.value('api-14'));
 
         when(mockDeviceManager.getDevices()).thenAnswer((Invocation invocation) {
@@ -293,7 +293,6 @@ void main() {
 
       testUsingContext('updates cache before checking for devices', () async {
         final RunCommand command = RunCommand();
-        applyMocksToCommand(command);
 
         // Called as part of requiredArtifacts()
         when(mockDeviceManager.getDevices()).thenAnswer(
@@ -330,7 +329,6 @@ void main() {
           mockDeviceManager.findTargetDevices(any, timeout: anyNamed('timeout')),
         ]);
       }, overrides: <Type, Generator>{
-        ApplicationPackageFactory: () => mockApplicationPackageFactory,
         Cache: () => mockCache,
         DeviceManager: () => mockDeviceManager,
         FileSystem: () => fs,
@@ -339,7 +337,6 @@ void main() {
 
       testUsingContext('passes device target platform to usage', () async {
         final RunCommand command = RunCommand();
-        applyMocksToCommand(command);
         final MockDevice mockDevice = MockDevice(TargetPlatform.ios);
         when(mockDevice.supportsRuntimeMode(any)).thenAnswer((Invocation invocation) => true);
         when(mockDevice.isLocalEmulator).thenAnswer((Invocation invocation) => Future<bool>.value(false));
@@ -358,12 +355,6 @@ void main() {
           userIdentifier: anyNamed('userIdentifier'),
         )).thenAnswer((Invocation invocation) => Future<LaunchResult>.value(LaunchResult.failed()));
 
-        when(mockArtifacts.getArtifactPath(
-          Artifact.flutterPatchedSdkPath,
-          platform: anyNamed('platform'),
-          mode: anyNamed('mode'),
-        )).thenReturn('/path/to/sdk');
-
         when(mockDeviceManager.getDevices()).thenAnswer(
           (Invocation invocation) => Future<List<Device>>.value(<Device>[mockDevice])
         );
@@ -381,112 +372,86 @@ void main() {
           ..writeAsStringSync('# Hello, World');
         globals.fs.currentDirectory = tempDir;
 
-        try {
-          await createTestCommandRunner(command).run(<String>[
+        // Capture Usage.test() events.
+        final StringBuffer buffer = await capturedConsolePrint(() =>
+          expectToolExitLater(createTestCommandRunner(command).run(<String>[
             'run',
             '--no-pub',
             '--no-hot',
-          ]);
-          fail('Exception expected');
-        } on ToolExit catch (e) {
-          // We expect a ToolExit because app does not start
-          expect(e.message, null);
-        } on Exception catch (e) {
-          fail('ToolExit expected, got $e');
-        }
-        final List<dynamic> captures = verify(mockUsage.sendCommand(
-          captureAny,
-          parameters: captureAnyNamed('parameters'),
-        )).captured;
-        expect(captures[0], 'run');
-        final Map<String, String> parameters = captures[1] as Map<String, String>;
-
-        expect(parameters[cdKey(CustomDimensions.commandRunIsEmulator)], 'false');
-        expect(parameters[cdKey(CustomDimensions.commandRunTargetName)], 'ios');
-        expect(parameters[cdKey(CustomDimensions.commandRunProjectHostLanguage)], 'swift');
-        expect(parameters[cdKey(CustomDimensions.commandRunTargetOsVersion)], 'iOS 13');
-        expect(parameters[cdKey(CustomDimensions.commandRunModeName)], 'debug');
-        expect(parameters[cdKey(CustomDimensions.commandRunProjectModule)], 'false');
-        expect(parameters.containsKey(cdKey(CustomDimensions.commandRunAndroidEmbeddingVersion)), false);
+          ]), isNull)
+        );
+        // Allow any CustomDimensions.localTime (cd33) timestamp.
+        final RegExp usageRegexp = RegExp(
+          'screenView {cd3: false, cd4: ios, cd22: iOS 13, cd23: debug, cd18: false, cd15: swift, cd31: false, cd33: .*, viewName: run'
+        );
+        expect(buffer.toString(), matches(usageRegexp));
       }, overrides: <Type, Generator>{
-        ApplicationPackageFactory: () => mockApplicationPackageFactory,
-        Artifacts: () => mockArtifacts,
+        Artifacts: () => artifacts,
         Cache: () => mockCache,
         DeviceManager: () => mockDeviceManager,
         FileSystem: () => fs,
         ProcessManager: () => mockProcessManager,
-        Usage: () => mockUsage,
+        Usage: () => usage,
       });
-    });
 
-    group('dart-flags option', () {
-      RunCommand command;
-      List<String> args;
-      MockDeviceManager mockDeviceManager;
+      testUsingContext('No web renderer options are added to non web device', () async {
+        final FakeApplicationPackageFactory applicationPackageFactory = ApplicationPackageFactory.instance as FakeApplicationPackageFactory;
+        final RunCommand command = RunCommand();
+        final MockDevice mockDevice = MockDevice(TargetPlatform.ios);
+        when(mockDevice.supportsRuntimeMode(any)).thenAnswer((Invocation invocation) => true);
+        when(mockDevice.isLocalEmulator).thenAnswer((Invocation invocation) => Future<bool>.value(false));
+        when(mockDevice.getLogReader(app: anyNamed('app'))).thenReturn(FakeDeviceLogReader());
+        when(mockDevice.supportsFastStart).thenReturn(true);
+        when(mockDevice.sdkNameAndVersion).thenAnswer((Invocation invocation) => Future<String>.value('iOS 13'));
+        applicationPackageFactory.package = PrebuiltIOSApp(projectBundleId: 'test');
 
-      setUp(() {
-        command = TestRunCommand();
-        args = <String> [
-          'run',
-          '--dart-flags', '"--observe"',
-          '--no-hot',
-          '--no-pub',
-        ];
-        mockDeviceManager = MockDeviceManager();
-        final FakeDevice fakeDevice = FakeDevice();
-        when(mockDeviceManager.getDevices()).thenAnswer((Invocation invocation) {
-          return Future<List<Device>>.value(<Device>[fakeDevice]);
+        DebuggingOptions debuggingOptions;
+
+        when(mockDevice.startApp(
+          any,
+          mainPath: anyNamed('mainPath'),
+          debuggingOptions: anyNamed('debuggingOptions'),
+          platformArgs: anyNamed('platformArgs'),
+          route: anyNamed('route'),
+          prebuiltApplication: anyNamed('prebuiltApplication'),
+          ipv6: anyNamed('ipv6'),
+          userIdentifier: anyNamed('userIdentifier'),
+        )).thenAnswer((Invocation invocation) {
+          debuggingOptions = invocation.namedArguments[#debuggingOptions] as DebuggingOptions;
+          return Future<LaunchResult>.value(LaunchResult.failed());
         });
-        when(mockDeviceManager.findTargetDevices(any, timeout: anyNamed('timeout'))).thenAnswer(
-          (Invocation invocation) => Future<List<Device>>.value(<Device>[fakeDevice])
+
+        when(mockDeviceManager.getDevices()).thenAnswer(
+          (Invocation invocation) => Future<List<Device>>.value(<Device>[mockDevice])
         );
-      });
 
-      testUsingContext('is populated in debug mode', () async {
-        // FakeDevice.startApp checks that --dart-flags doesn't get dropped and
-        // throws ToolExit with FakeDevice.kSuccess if the flag is populated.
-        try {
-          await createTestCommandRunner(command).run(args);
-          fail('Expect exception');
-        } on ToolExit catch (e) {
-          expect(e.exitCode, FakeDevice.kSuccess);
-        }
+        when(mockDeviceManager.findTargetDevices(any, timeout: anyNamed('timeout'))).thenAnswer(
+          (Invocation invocation) => Future<List<Device>>.value(<Device>[mockDevice])
+        );
+
+        final Directory tempDir = globals.fs.systemTempDirectory.createTempSync('flutter_run_test.');
+        tempDir.childDirectory('ios').childFile('AppDelegate.swift').createSync(recursive: true);
+        tempDir.childFile('.dart_tool/package_config')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(json.encode(<String, Object>{'configVersion': 2, 'packages': <Object>[]}));
+        tempDir.childDirectory('lib').childFile('main.dart').createSync(recursive: true);
+        tempDir.childFile('pubspec.yaml').writeAsStringSync('name: test');
+        globals.fs.currentDirectory = tempDir;
+
+        await expectToolExitLater(createTestCommandRunner(command).run(<String>[
+          'run',
+          '--no-pub',
+          '--no-hot',
+        ]), isNull);
+        // No web renderer options are added.
+        expect(debuggingOptions.buildInfo.dartDefines, isEmpty);
       }, overrides: <Type, Generator>{
-        ApplicationPackageFactory: () => mockApplicationPackageFactory,
+        Artifacts: () => artifacts,
+        Cache: () => mockCache,
         DeviceManager: () => mockDeviceManager,
-      });
-
-      testUsingContext('is populated in profile mode', () async {
-        args.add('--profile');
-
-        // FakeDevice.startApp checks that --dart-flags doesn't get dropped and
-        // throws ToolExit with FakeDevice.kSuccess if the flag is populated.
-        try {
-          await createTestCommandRunner(command).run(args);
-          fail('Expect exception');
-        } on ToolExit catch (e) {
-          expect(e.exitCode, FakeDevice.kSuccess);
-        }
-      }, overrides: <Type, Generator>{
-        ApplicationPackageFactory: () => mockApplicationPackageFactory,
-        DeviceManager: () => mockDeviceManager,
-      });
-
-      testUsingContext('is not populated in release mode', () async {
-        args.add('--release');
-
-        // FakeDevice.startApp checks that --dart-flags *does* get dropped and
-        // throws ToolExit with FakeDevice.kSuccess if the flag is set to the
-        // empty string.
-        try {
-          await createTestCommandRunner(command).run(args);
-          fail('Expect exception');
-        } on ToolExit catch (e) {
-          expect(e.exitCode, FakeDevice.kSuccess);
-        }
-      }, overrides: <Type, Generator>{
-        ApplicationPackageFactory: () => mockApplicationPackageFactory,
-        DeviceManager: () => mockDeviceManager,
+        FileSystem: () => fs,
+        ProcessManager: () => mockProcessManager,
+        ApplicationPackageFactory: () => FakeApplicationPackageFactory(),
       });
     });
 
@@ -540,9 +505,73 @@ void main() {
       DeviceManager: () => mockDeviceManager,
     });
   });
+
+  group('dart-defines and web-renderer options', () {
+    List<String> dartDefines;
+
+    setUp(() {
+      dartDefines = <String>[];
+    });
+
+    test('auto web-renderer with no dart-defines', () {
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'auto');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=true']);
+    });
+
+    test('canvaskit web-renderer with no dart-defines', () {
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'canvaskit');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=false','FLUTTER_WEB_USE_SKIA=true']);
+    });
+
+    test('html web-renderer with no dart-defines', () {
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'html');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=false','FLUTTER_WEB_USE_SKIA=false']);
+    });
+
+    test('auto web-renderer with existing dart-defines', () {
+      dartDefines = <String>['FLUTTER_WEB_USE_SKIA=false'];
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'auto');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=true']);
+    });
+
+    test('canvaskit web-renderer with no dart-defines', () {
+      dartDefines = <String>['FLUTTER_WEB_USE_SKIA=false'];
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'canvaskit');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=false','FLUTTER_WEB_USE_SKIA=true']);
+    });
+
+    test('html web-renderer with no dart-defines', () {
+      dartDefines = <String>['FLUTTER_WEB_USE_SKIA=true'];
+      dartDefines = FlutterCommand.updateDartDefines(dartDefines, 'html');
+      expect(dartDefines, <String>['FLUTTER_WEB_AUTO_DETECT=false','FLUTTER_WEB_USE_SKIA=false']);
+    });
+  });
+
+  testUsingContext('Flutter run catches service has disappear errors and throws a tool exit', () async {
+    final FakeResidentRunner residentRunner = FakeResidentRunner();
+    residentRunner.rpcError = RPCError('flutter._listViews', RPCErrorCodes.kServiceDisappeared, '');
+    final TestRunCommandWithFakeResidentRunner command = TestRunCommandWithFakeResidentRunner();
+    command.fakeResidentRunner = residentRunner;
+
+    await expectToolExitLater(createTestCommandRunner(command).run(<String>[
+      'run',
+      '--no-pub',
+    ]), contains('Lost connection to device.'));
+  });
+
+  testUsingContext('Flutter run does not catch other RPC errors', () async {
+    final FakeResidentRunner residentRunner = FakeResidentRunner();
+    residentRunner.rpcError = RPCError('flutter._listViews', RPCErrorCodes.kInvalidParams, '');
+    final TestRunCommandWithFakeResidentRunner command = TestRunCommandWithFakeResidentRunner();
+    command.fakeResidentRunner = residentRunner;
+
+    await expectLater(() => createTestCommandRunner(command).run(<String>[
+      'run',
+      '--no-pub',
+    ]), throwsA(isA<RPCError>()));
+  });
 }
 
-class MockArtifacts extends Mock implements Artifacts {}
 class MockCache extends Mock implements Cache {}
 class MockUsage extends Mock implements Usage {}
 
@@ -585,7 +614,7 @@ class FakeDevice extends Fake implements Device {
   bool supportsRuntimeMode(BuildMode mode) => true;
 
   @override
-  bool get supportsHotReload => false;
+  bool supportsHotReload = false;
 
   @override
   bool get supportsFastStart => false;
@@ -638,5 +667,56 @@ class FakeDevice extends Fake implements Device {
       _throwToolExit(kSuccess);
     }
     return null;
+  }
+}
+
+class FakeApplicationPackageFactory extends Fake implements ApplicationPackageFactory {
+  ApplicationPackage package;
+
+  @override
+  Future<ApplicationPackage> getPackageForPlatform(
+    TargetPlatform platform, {
+    BuildInfo buildInfo,
+    File applicationBinary,
+  }) async {
+    return package;
+  }
+}
+
+class TestRunCommandWithFakeResidentRunner extends RunCommand {
+  FakeResidentRunner fakeResidentRunner;
+
+  @override
+  Future<ResidentRunner> createRunner({
+    @required bool hotMode,
+    @required List<FlutterDevice> flutterDevices,
+    @required String applicationBinaryPath,
+    @required FlutterProject flutterProject,
+  }) async {
+    return fakeResidentRunner;
+  }
+
+  @override
+  // ignore: must_call_super
+  Future<void> validateCommand() async {
+    devices = <Device>[FakeDevice()..supportsHotReload = true];
+  }
+}
+
+class FakeResidentRunner extends Fake implements ResidentRunner {
+  RPCError rpcError;
+
+  @override
+  Future<int> run({
+    Completer<DebugConnectionInfo> connectionInfoCompleter,
+    Completer<void> appStartedCompleter,
+    bool enableDevTools = false,
+    String route,
+  }) async {
+    await null;
+    if (rpcError != null) {
+      throw rpcError;
+    }
+    return 0;
   }
 }

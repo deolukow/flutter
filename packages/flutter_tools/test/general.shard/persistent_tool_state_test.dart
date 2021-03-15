@@ -12,7 +12,7 @@ import '../src/common.dart';
 
 void main() {
   testWithoutContext('state can be set and persists', () {
-    final MemoryFileSystem fileSystem = MemoryFileSystem();
+    final MemoryFileSystem fileSystem = MemoryFileSystem.test();
     final Directory directory = fileSystem.directory('state_dir');
     directory.createSync();
     final File stateFile = directory.childFile('.flutter_tool_state');
@@ -35,7 +35,7 @@ void main() {
   });
 
   testWithoutContext('channel versions can be cached and stored', () {
-    final MemoryFileSystem fileSystem = MemoryFileSystem();
+    final MemoryFileSystem fileSystem = MemoryFileSystem.test();
     final Directory directory = fileSystem.directory('state_dir')..createSync();
     final PersistentToolState state1 = PersistentToolState.test(
       directory: directory,
@@ -56,5 +56,24 @@ void main() {
     expect(state2.lastActiveVersion(Channel.dev), 'def');
     expect(state2.lastActiveVersion(Channel.beta), 'ghi');
     expect(state2.lastActiveVersion(Channel.stable), 'jkl');
+  });
+
+  testWithoutContext('lastDevToolsActivationTime can be cached and stored', () {
+    final MemoryFileSystem fileSystem = MemoryFileSystem.test();
+    final Directory directory = fileSystem.directory('state_dir')..createSync();
+    final PersistentToolState state1 = PersistentToolState.test(
+      directory: directory,
+      logger: BufferLogger.test(),
+    );
+
+    final DateTime time = DateTime.now();
+    state1.lastDevToolsActivationTime = time;
+
+    final PersistentToolState state2 = PersistentToolState.test(
+      directory: directory,
+      logger: BufferLogger.test(),
+    );
+
+    expect(state2.lastDevToolsActivationTime, equals(time));
   });
 }

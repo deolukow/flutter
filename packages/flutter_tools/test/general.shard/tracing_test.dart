@@ -34,6 +34,8 @@ final vm_service.Isolate fakeUnpausedIsolate = vm_service.Isolate(
   pauseOnExit: false,
   runnable: true,
   startTime: 0,
+  isSystemIsolate: false,
+  isolateFlags: <vm_service.IsolateFlag>[],
 );
 
 final FlutterView fakeFlutterView = FlutterView(
@@ -126,6 +128,29 @@ void main() {
       'timeToFirstFrameMicros': 2,
       'timeAfterFrameworkInitMicros': 1,
     });
+  });
+
+  testWithoutContext('throws tool exit if the vmservice disconnects', () async {
+    final BufferLogger logger = BufferLogger.test();
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    final FakeVmServiceHost fakeVmServiceHost = FakeVmServiceHost(requests: <FakeVmServiceRequest>[
+      ...vmServiceSetup,
+      const FakeVmServiceRequest(
+        method: 'getVMTimeline',
+        errorCode: RPCErrorCodes.kServiceDisappeared,
+      ),
+      const FakeVmServiceRequest(
+        method: 'setVMTimelineFlags',
+        args: <String, Object>{
+          'recordedStreams': <Object>[],
+        },
+      ),
+    ]);
+
+    await expectLater(() async => await downloadStartupTrace(fakeVmServiceHost.vmService,
+      output: fileSystem.currentDirectory,
+      logger: logger,
+    ), throwsToolExit(message: 'The device disconnected before the timeline could be retrieved.'));
   });
 
   testWithoutContext('throws tool exit if timeline is missing the engine start event', () async {
@@ -233,5 +258,84 @@ void main() {
       'engineEnterTimestampMicros': 0,
       'timeToFrameworkInitMicros': 1,
     });
+  });
+
+  testWithoutContext('downloadStartupTrace also downloads the timeline', () async {
+    final BufferLogger logger = BufferLogger.test();
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    final FakeVmServiceHost fakeVmServiceHost = FakeVmServiceHost(requests: <FakeVmServiceRequest>[
+      ...vmServiceSetup,
+      FakeVmServiceRequest(
+        method: 'getVMTimeline',
+        jsonResponse: vm_service.Timeline(
+          timeExtentMicros: 4,
+          timeOriginMicros: 0,
+          traceEvents: <vm_service.TimelineEvent>[
+            vm_service.TimelineEvent.parse(<String, Object>{
+              'name': kFlutterEngineMainEnterEventName,
+              'ts': 0,
+            }),
+            vm_service.TimelineEvent.parse(<String, Object>{
+              'name': kFrameworkInitEventName,
+              'ts': 1,
+            }),
+            vm_service.TimelineEvent.parse(<String, Object>{
+              'name': kFirstFrameBuiltEventName,
+              'ts': 2,
+            }),
+            vm_service.TimelineEvent.parse(<String, Object>{
+              'name': kFirstFrameRasterizedEventName,
+              'ts': 3,
+            }),
+          ],
+        ).toJson(),
+      ),
+      const FakeVmServiceRequest(
+        method: 'setVMTimelineFlags',
+        args: <String, Object>{
+          'recordedStreams': <Object>[],
+        },
+      ),
+    ]);
+
+    // Validate that old tracing data is deleted.
+    final File timelineFile = fileSystem.currentDirectory.childFile('start_up_timeline.json')
+      ..writeAsStringSync('stale');
+
+    await downloadStartupTrace(fakeVmServiceHost.vmService,
+      output: fileSystem.currentDirectory,
+      logger: logger,
+    );
+
+    final Map<String, dynamic> expectedTimeline = <String, dynamic>{
+      'type': 'Timeline',
+      'traceEvents': <dynamic>[
+        <String, dynamic>{
+          'name': 'FlutterEngineMainEnter',
+          'ts': 0,
+          'type': 'TimelineEvent',
+        },
+        <String, dynamic>{
+          'name': 'Framework initialization',
+          'ts': 1,
+          'type': 'TimelineEvent',
+        },
+        <String, dynamic>{
+          'name': 'Widgets built first useful frame',
+          'ts': 2,
+          'type': 'TimelineEvent',
+        },
+        <String, dynamic>{
+          'name': 'Rasterized first useful frame',
+          'ts': 3,
+          'type': 'TimelineEvent',
+        },
+      ],
+      'timeOriginMicros': 0,
+      'timeExtentMicros': 4,
+    };
+
+    expect(timelineFile, exists);
+    expect(json.decode(timelineFile.readAsStringSync()), expectedTimeline);
   });
 }

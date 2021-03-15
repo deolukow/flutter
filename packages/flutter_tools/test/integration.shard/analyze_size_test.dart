@@ -4,25 +4,26 @@
 
 import 'package:file_testing/file_testing.dart';
 import 'package:flutter_tools/src/base/io.dart';
-import 'package:flutter_tools/src/base/platform.dart';
 
 import '../src/common.dart';
 import 'test_utils.dart';
 
 const String apkDebugMessage = 'A summary of your APK analysis can be found at: ';
 const String iosDebugMessage = 'A summary of your iOS bundle analysis can be found at: ';
+const String runDevToolsMessage = 'flutter pub global activate devtools; flutter pub global run devtools ';
 
 void main() {
   testWithoutContext('--analyze-size flag produces expected output on hello_world for Android', () async {
-    final String woringDirectory = fileSystem.path.join(getFlutterRoot(), 'examples', 'hello_world');
+    final String workingDirectory = fileSystem.path.join(getFlutterRoot(), 'examples', 'hello_world');
     final String flutterBin = fileSystem.path.join(getFlutterRoot(), 'bin', 'flutter');
     final ProcessResult result = await processManager.run(<String>[
       flutterBin,
+      ...getLocalEngineArguments(),
       'build',
       'apk',
       '--analyze-size',
       '--target-platform=android-arm64'
-    ], workingDirectory: fileSystem.path.join(getFlutterRoot(), 'examples', 'hello_world'));
+    ], workingDirectory: workingDirectory);
 
     print(result.stdout);
     print(result.stderr);
@@ -33,20 +34,30 @@ void main() {
       .firstWhere((String line) => line.contains(apkDebugMessage));
 
     final String outputFilePath = line.split(apkDebugMessage).last.trim();
-    expect(fileSystem.file(fileSystem.path.join(woringDirectory, outputFilePath)), exists);
+    expect(fileSystem.file(fileSystem.path.join(workingDirectory, outputFilePath)), exists);
+    expect(outputFilePath, contains('.flutter-devtools'));
+
+    final String devToolsCommand = result.stdout.toString()
+        .split('\n')
+        .firstWhere((String line) => line.contains(runDevToolsMessage));
+    final String commandArguments = devToolsCommand.split(runDevToolsMessage).last.trim();
+    final String relativeAppSizePath = outputFilePath.split('.flutter-devtools/').last.trim();
+    expect(commandArguments.contains('--appSizeBase=$relativeAppSizePath'), isTrue);
+
     expect(result.exitCode, 0);
   });
 
   testWithoutContext('--analyze-size flag produces expected output on hello_world for iOS', () async {
-    final String woringDirectory = fileSystem.path.join(getFlutterRoot(), 'examples', 'hello_world');
+    final String workingDirectory = fileSystem.path.join(getFlutterRoot(), 'examples', 'hello_world');
     final String flutterBin = fileSystem.path.join(getFlutterRoot(), 'bin', 'flutter');
     final ProcessResult result = await processManager.run(<String>[
       flutterBin,
+       ...getLocalEngineArguments(),
       'build',
       'ios',
       '--analyze-size',
       '--no-codesign',
-    ], workingDirectory: woringDirectory);
+    ], workingDirectory: workingDirectory);
 
     print(result.stdout);
     print(result.stderr);
@@ -57,14 +68,23 @@ void main() {
       .firstWhere((String line) => line.contains(iosDebugMessage));
 
     final String outputFilePath = line.split(iosDebugMessage).last.trim();
-    expect(fileSystem.file(fileSystem.path.join(woringDirectory, outputFilePath)), exists);
+    expect(fileSystem.file(fileSystem.path.join(workingDirectory, outputFilePath)), exists);
+
+    final String devToolsCommand = result.stdout.toString()
+        .split('\n')
+        .firstWhere((String line) => line.contains(runDevToolsMessage));
+    final String commandArguments = devToolsCommand.split(runDevToolsMessage).last.trim();
+    final String relativeAppSizePath = outputFilePath.split('.flutter-devtools/').last.trim();
+    expect(commandArguments.contains('--appSizeBase=$relativeAppSizePath'), isTrue);
+
     expect(result.exitCode, 0);
-  }, skip: !const LocalPlatform().isMacOS); // Only supported on macOS
+  }, skip: true); // Extremely flaky due to https://github.com/flutter/flutter/issues/68144
 
   testWithoutContext('--analyze-size is only supported in release mode', () async {
     final String flutterBin = fileSystem.path.join(getFlutterRoot(), 'bin', 'flutter');
     final ProcessResult result = await processManager.run(<String>[
       flutterBin,
+       ...getLocalEngineArguments(),
       'build',
       'apk',
       '--analyze-size',
@@ -81,6 +101,7 @@ void main() {
 
   testWithoutContext('--analyze-size is not supported in combination with --split-debug-info', () async {
     final String flutterBin = fileSystem.path.join(getFlutterRoot(), 'bin', 'flutter');
+<<<<<<< HEAD
     final List<String> localEngineArguments = <String>[
       if (platform.environment.containsKey('FLUTTER_LOCAL_ENGINE'))
         '--local-engine=${platform.environment['FLUTTER_LOCAL_ENGINE']}',
@@ -90,6 +111,11 @@ void main() {
     final ProcessResult result = await processManager.run(<String>[
       flutterBin,
        ...localEngineArguments,
+=======
+    final ProcessResult result = await processManager.run(<String>[
+      flutterBin,
+       ...getLocalEngineArguments(),
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
       'build',
       'apk',
       '--analyze-size',

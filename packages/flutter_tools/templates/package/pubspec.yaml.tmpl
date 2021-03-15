@@ -5,7 +5,11 @@ author:
 homepage:
 
 environment:
+<<<<<<< HEAD
   sdk: ">=2.7.0 <3.0.0"
+=======
+  sdk: {{dartSdkVersionBounds}}
+>>>>>>> 8962f6dc68ec8e2206ac2fa874da4a453856c7d3
   flutter: ">=1.17.0"
 
 dependencies:
@@ -15,10 +19,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  {{#withDriverTest}}
-  flutter_driver:
-    sdk: flutter
-  {{/withDriverTest}}
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

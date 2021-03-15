@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// @dart = 2.8
-
+@TestOn('!chrome')
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -13,7 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  FakeBuilder mockHelper;
+  late FakeBuilder mockHelper;
 
   setUp(() {
     mockHelper = FakeBuilder();
@@ -307,7 +306,7 @@ void main() {
         final FlutterError error = FlutterError('Oops');
         double errorCount = 0;
 
-        runZoned(
+        runZonedGuarded(
           () async {
             mockHelper.refreshCompleter = Completer<void>.sync();
             await tester.pumpWidget(
@@ -373,7 +372,7 @@ void main() {
             )));
             expect(mockHelper.invocations, hasLength(5));
           },
-          onError: (dynamic e) {
+          (Object e, StackTrace stack) {
             expect(e, error);
             expect(errorCount, 0);
             errorCount++;
@@ -919,6 +918,47 @@ void main() {
 
       expect(tester.takeException(), isNull);
     }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
+
+    // Test to make sure the refresh sliver's overscroll isn't eaten by the
+    // nav bar sliver https://github.com/flutter/flutter/issues/74516.
+    testWidgets(
+        'properly displays when the refresh sliver is behind the large title nav bar sliver',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: CustomScrollView(
+            slivers: <Widget>[
+              const CupertinoSliverNavigationBar(
+                largeTitle: Text('Title'),
+              ),
+              CupertinoSliverRefreshControl(
+                builder: mockHelper.builder,
+              ),
+              buildAListOfStuff(),
+            ],
+          ),
+        ),
+      );
+
+      final double initialFirstCellY = tester.getTopLeft(find.widgetWithText(Container, '0')).dy;
+
+      // Drag down but not enough to trigger the refresh.
+      await tester.drag(find.text('0'), const Offset(0.0, 50.0), touchSlopY: 0);
+      await tester.pump();
+
+      expect(mockHelper.invocations.first, matchesBuilder(
+        refreshState: RefreshIndicatorMode.drag,
+        pulledExtent: 50,
+        refreshTriggerPullDistance: 100,  // default value.
+        refreshIndicatorExtent: 60,  // default value.
+      ));
+      expect(mockHelper.invocations, hasLength(1));
+
+      expect(
+        tester.getTopLeft(find.widgetWithText(Container, '0')).dy,
+        initialFirstCellY + 50
+      );
+    }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
   };
 
   final VoidCallback stateMachineTestGroup = () {
@@ -1407,10 +1447,10 @@ class RefreshTaskInvocation extends MockHelperInvocation {
 @immutable
 class BuilderInvocation extends MockHelperInvocation {
   const BuilderInvocation({
-    @required this.refreshState,
-    @required this.pulledExtent,
-    @required this.refreshIndicatorExtent,
-    @required this.refreshTriggerPullDistance,
+    required this.refreshState,
+    required this.pulledExtent,
+    required this.refreshIndicatorExtent,
+    required this.refreshTriggerPullDistance,
   });
 
   final RefreshIndicatorMode refreshState;
@@ -1423,10 +1463,10 @@ class BuilderInvocation extends MockHelperInvocation {
 }
 
 Matcher matchesBuilder({
-  @required RefreshIndicatorMode refreshState,
-  @required dynamic pulledExtent,
-  @required dynamic refreshTriggerPullDistance,
-  @required dynamic refreshIndicatorExtent,
+  required RefreshIndicatorMode refreshState,
+  required dynamic pulledExtent,
+  required dynamic refreshTriggerPullDistance,
+  required dynamic refreshIndicatorExtent,
 }) {
   return isA<BuilderInvocation>()
     .having((BuilderInvocation invocation) => invocation.refreshState, 'refreshState', refreshState)

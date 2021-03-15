@@ -34,8 +34,6 @@ void main() {
     mockAndroidSdk = MockAndroidSdk();
     mockFlutterVersion = MockFlutterVersion();
     mockUsage = MockUsage();
-
-    when(mockUsage.isFirstRun).thenReturn(false);
   });
 
   void verifyNoAnalytics() {
@@ -188,19 +186,19 @@ void main() {
 
       expect(
         testLogger.statusText,
-        containsIgnoringWhitespace('enable-web: true (Unavailable)'),
+        containsIgnoringWhitespace('enable-web: true'),
       );
       expect(
         testLogger.statusText,
-        containsIgnoringWhitespace('enable-linux-desktop: true (Unavailable)'),
+        containsIgnoringWhitespace('enable-linux-desktop: true'),
       );
       expect(
         testLogger.statusText,
-        containsIgnoringWhitespace('enable-windows-desktop: true (Unavailable)'),
+        containsIgnoringWhitespace('enable-windows-desktop: true'),
       );
       expect(
         testLogger.statusText,
-        containsIgnoringWhitespace('enable-macos-desktop: true (Unavailable)'),
+        containsIgnoringWhitespace('enable-macos-desktop: true'),
       );
       verifyNoAnalytics();
     }, overrides: <Type, Generator>{
@@ -288,6 +286,24 @@ void main() {
     }, overrides: <Type, Generator>{
       Usage: () => mockUsage,
     });
+
+    testUsingContext('analytics reported disabled when suppressed', () async {
+      final ConfigCommand configCommand = ConfigCommand();
+      final CommandRunner<void> commandRunner = createTestCommandRunner(configCommand);
+
+      mockUsage.suppressAnalytics = true;
+
+      await commandRunner.run(<String>[
+        'config',
+      ]);
+
+      expect(
+        testLogger.statusText,
+        containsIgnoringWhitespace('Analytics reporting is currently disabled'),
+      );
+    }, overrides: <Type, Generator>{
+      Usage: () => mockUsage,
+    });
   });
 }
 
@@ -306,4 +322,7 @@ class MockFlutterVersion extends Mock implements FlutterVersion {}
 class MockUsage extends Mock implements Usage {
   @override
   bool enabled = true;
+
+  @override
+  bool suppressAnalytics = false;
 }

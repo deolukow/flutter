@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -29,7 +28,7 @@ Future<void> main(List<String> args) async {
 Future<Archive> fetchArchive(String url, int maxTries) async {
   List<int> responseBytes;
   for (int i = 0; i < maxTries; i++) {
-    final http.Response response = await http.get(url);
+    final http.Response response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
       responseBytes = response.bodyBytes;
       break;

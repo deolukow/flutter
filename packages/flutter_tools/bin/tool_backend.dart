@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.9
+
 // Do not add package imports to this file.
 import 'dart:convert'; // ignore: dart_convert_import.
 import 'dart:io'; // ignore: dart_io_import.
@@ -27,6 +29,7 @@ Future<void> main(List<String> arguments) async {
   final bool trackWidgetCreation = Platform.environment['TRACK_WIDGET_CREATION'] == 'true';
   final bool treeShakeIcons = Platform.environment['TREE_SHAKE_ICONS'] == 'true';
   final bool verbose = Platform.environment['VERBOSE_SCRIPT_LOGGING'] == 'true';
+  final bool prefixedErrors = Platform.environment['PREFIXED_ERROR_LOGGING'] == 'true';
 
   Directory.current = projectDirectory;
 
@@ -59,6 +62,8 @@ or
     <String>[
       if (verbose)
         '--verbose',
+      if (prefixedErrors)
+        '--prefixed-errors',
       if (flutterEngine != null) '--local-engine-src-path=$flutterEngine',
       if (localEngine != null) '--local-engine=$localEngine',
       'assemble',

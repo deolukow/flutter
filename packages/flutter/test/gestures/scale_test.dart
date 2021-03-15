@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// @dart = 2.8
-
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,15 +17,15 @@ void main() {
     final TapGestureRecognizer tap = TapGestureRecognizer();
 
     bool didStartScale = false;
-    Offset updatedFocalPoint;
+    Offset? updatedFocalPoint;
     scale.onStart = (ScaleStartDetails details) {
       didStartScale = true;
       updatedFocalPoint = details.focalPoint;
     };
 
-    double updatedScale;
-    double updatedHorizontalScale;
-    double updatedVerticalScale;
+    double? updatedScale;
+    double? updatedHorizontalScale;
+    double? updatedVerticalScale;
     scale.onUpdate = (ScaleUpdateDetails details) {
       updatedScale = details.scale;
       updatedHorizontalScale = details.horizontalScale;
@@ -230,7 +228,7 @@ void main() {
       didStartScale = true;
     };
 
-    double updatedScale;
+    double? updatedScale;
     scale.onUpdate = (ScaleUpdateDetails details) {
       updatedScale = details.scale;
     };
@@ -258,13 +256,13 @@ void main() {
     final ScaleGestureRecognizer scale = ScaleGestureRecognizer(kind: PointerDeviceKind.touch);
 
     bool didStartScale = false;
-    Offset updatedFocalPoint;
+    Offset? updatedFocalPoint;
     scale.onStart = (ScaleStartDetails details) {
       didStartScale = true;
       updatedFocalPoint = details.focalPoint;
     };
 
-    double updatedScale;
+    double? updatedScale;
     scale.onUpdate = (ScaleUpdateDetails details) {
       updatedScale = details.scale;
       updatedFocalPoint = details.focalPoint;
@@ -404,13 +402,13 @@ void main() {
     final TapGestureRecognizer tap = TapGestureRecognizer();
 
     bool didStartScale = false;
-    Offset updatedFocalPoint;
+    Offset? updatedFocalPoint;
     scale.onStart = (ScaleStartDetails details) {
       didStartScale = true;
       updatedFocalPoint = details.focalPoint;
     };
 
-    double updatedRotation;
+    double? updatedRotation;
     scale.onUpdate = (ScaleUpdateDetails details) {
       updatedRotation = details.rotation;
       updatedFocalPoint = details.focalPoint;
@@ -572,5 +570,57 @@ void main() {
 
     scale.dispose();
     tap.dispose();
+  });
+
+  testGesture('Scale gestures pointer count test', (GestureTester tester) {
+    final ScaleGestureRecognizer scale = ScaleGestureRecognizer();
+
+    int pointerCountOfStart = 0;
+    scale.onStart = (ScaleStartDetails details) => pointerCountOfStart = details.pointerCount;
+
+    int pointerCountOfUpdate = 0;
+    scale.onUpdate = (ScaleUpdateDetails details) => pointerCountOfUpdate = details.pointerCount;
+
+    int pointerCountOfEnd = 0;
+    scale.onEnd = (ScaleEndDetails details) => pointerCountOfEnd = details.pointerCount;
+
+    final TestPointer pointer1 = TestPointer(1);
+    final PointerDownEvent down = pointer1.down(const Offset(0.0, 0.0));
+    scale.addPointer(down);
+    tester.closeArena(1);
+
+    // One-finger panning
+    tester.route(down);
+    // One pointer in contact with the screen now.
+    expect(pointerCountOfStart, 1);
+    tester.route(pointer1.move(const Offset(20.0, 30.0)));
+    expect(pointerCountOfUpdate, 1);
+
+    // Two-finger scaling
+    final TestPointer pointer2 = TestPointer(2);
+    final PointerDownEvent down2 = pointer2.down(const Offset(10.0, 20.0));
+    scale.addPointer(down2);
+    tester.closeArena(2);
+    tester.route(down2);
+    // Two pointers in contact with the screen now.
+    expect(pointerCountOfEnd, 2); // Additional pointer down will trigger an end event.
+
+    tester.route(pointer2.move(const Offset(0.0, 10.0)));
+    expect(pointerCountOfStart, 2); // The new pointer move will trigger a start event.
+    expect(pointerCountOfUpdate, 2);
+
+    tester.route(pointer1.up());
+    // One pointer in contact with the screen now.
+    expect(pointerCountOfEnd, 1);
+
+    tester.route(pointer2.move(const Offset(0.0, 10.0)));
+    expect(pointerCountOfStart, 1);
+    expect(pointerCountOfUpdate, 1);
+
+    tester.route(pointer2.up());
+    // No pointer in contact with the screen now.
+    expect(pointerCountOfEnd, 0);
+
+    scale.dispose();
   });
 }
